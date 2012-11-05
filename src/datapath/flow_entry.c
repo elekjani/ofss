@@ -127,6 +127,19 @@ init_group_refs(struct flow_entry *entry) {
     }
 }
 
+/* Initializes the packet processor references of the flow entry. */
+static void
+init_packetproc_refs(struct flow_entry *entry) {
+    size_t i;
+
+    for (i=0; i<entry->stats->instructions_num; i++) {
+        if (entry->stats->instructions[i]->type == OFPIT_GOTO_PROCESSOR) {
+            struct ofl_instruction_goto_processor *ia = (struct ofl_instruction_goto_processor *)entry->stats->instructions[i];
+            dp_pl_packetproc_add_flow_ref(flow_table_get_dp_loop(entry->table), ia->processor_id, ia->input_id, entry->uid);
+        }
+    }
+}
+
 /* Deletes group references from the flow, and also deletes the flow references
  * from the referecenced groups. */
 static void
@@ -140,6 +153,19 @@ del_group_refs(struct flow_entry *entry) {
             dp_pl_group_del_flow_ref(flow_table_get_dp_loop(entry->table), (*(entry->group_refs))[i], entry->uid);
         }
         (*(entry->group_refs))[i] = OFPG_ALL;
+    }
+}
+
+/* Deletes the flow references from the referecenced groups. */
+static void
+del_packetproc_refs(struct flow_entry *entry) {
+    struct ofl_flow_stats *stats = entry->stats;
+    size_t i;
+    for (i=0; i < stats->instructions_num; i++) {
+        if( stats->instructions[i]->type == OFPIT_GOTO_PROCESSOR ) {
+            struct ofl_instruction_goto_processor *it = (struct ofl_instruction_goto_processor *) stats->instructions[i];
+            dp_pl_packetproc_del_flow_ref(flow_table_get_dp_loop(entry->table), it->processor_id, it->input_id, entry->uid);
+        }
     }
 }
 
@@ -184,6 +210,7 @@ flow_entry_new(struct flow_table *flow_table, uint32_t uid, struct ofl_msg_flow_
     entry->group_refs_num = 0;
 
     init_group_refs(entry);
+    init_packetproc_refs(entry);
 
     return entry;
 }
@@ -195,6 +222,7 @@ flow_entry_free(struct flow_entry *entry, bool free_stats) {
     // NOTE: This will be called when the group entry itself destroys the
     //       flow; but it won't be a problem.
     del_group_refs(entry);
+    del_packetproc_refs(entry);
     if (free_stats) {
         ofl_structs_free_flow_stats(entry->stats, OFL_NO_EXP, NULL/*errbuf*/);
     }
@@ -343,6 +371,7 @@ flow_entry_replace_instructions(struct flow_entry *entry,
                                       size_t instructions_num,
                                       struct ofl_instruction_header **instructions) {
     del_group_refs(entry);
+    del_packetproc_refs(entry);
 
     OFL_UTILS_FREE_ARR_FUN3(entry->stats->instructions, entry->stats->instructions_num,
                             ofl_structs_free_instruction, OFL_NO_EXP, NULL/*errbuf*/);
@@ -356,6 +385,7 @@ flow_entry_replace_instructions(struct flow_entry *entry,
     }
 
     init_group_refs(entry);
+    init_packetproc_refs(entry);
 }
 
 /* Returns a copy of the entry's flow statistics structure. */
@@ -424,6 +454,8 @@ flow_entry_exec(struct flow_entry *flow, struct pl_pkt *pl_pkt, ev_tstamp now) {
     size_t i;
     bool clear_execd = false;
     of_tableid_t next = OF_ALL_TABLE;
+    struct ofl_instruction_goto_processor *gi;
+    bool goto_packetproc = false;
 
     flow->stats->byte_count += pl_pkt->pkt->data_len;
     flow->stats->packet_count++;
@@ -474,10 +506,20 @@ flow_entry_exec(struct flow_entry *flow, struct pl_pkt *pl_pkt, ev_tstamp now) {
                 }
                 break;
             }
+            case OFPIT_GOTO_PROCESSOR: {
+               gi = (struct ofl_instruction_goto_processor *)inst;
+
+               goto_packetproc = true;
+               break;
+            }
             case OFPIT_EXPERIMENTER: {
                 break;
             }
         }
+    }
+    if(goto_packetproc) {
+        dp_pl_pkt_to_pp(flow_table_get_dp_loop(flow->table), pl_pkt, gi->processor_id, gi->input_id);
+        action_set_clear(pl_pkt->act_set);  // a clone is given to pp, no need for this actions
     }
 
     return next;

@@ -222,6 +222,15 @@ struct ofl_msg_table_mod {
     uint32_t   config;   /* Bitmap of OFPTC_* flags */
 };
 
+struct ofl_msg_processor_mod {
+    struct ofl_msg_header header;
+
+    uint32_t type;
+    uint32_t proc_id;
+    uint16_t command;
+    uint8_t  data[0];
+};
+
 /**********************
  * Statistics messages
  **********************/
@@ -275,13 +284,24 @@ struct ofl_msg_stats_request_group {
     uint32_t   group_id; /* All groups if OFPG_ALL. */
 };
 
+struct ofl_msg_stats_request_processor {
+	struct ofl_msg_stats_request_header header; /* OFPST_PROCESSOR */
+	uint32_t type;	/* Packet processor type identifier */
+};
 
+struct ofl_msg_stats_request_processor_inst {
+	struct ofl_msg_stats_request_header header; /* OFPST_PROCESSOR_INST */
+	uint32_t proc_id;		/* Packet processor identifier */
+	uint32_t input_id;		/* Input identifier.
+							   0xFFFFFFFF for all inputs */
+};
 
 struct ofl_msg_stats_request_experimenter {
     struct ofl_msg_stats_request_header   header; /* OFPST_EXPERIMENTER */
 
     uint32_t   experimenter_id;
 };
+
 
 struct ofl_msg_stats_reply_header {
     struct ofl_msg_header   header; /* OFPT_STATS_REPLY */
@@ -351,6 +371,20 @@ struct ofl_msg_stats_reply_group_desc {
     struct ofl_group_desc_stats **stats;
 };
 
+struct ofl_msg_stats_reply_processor {
+    struct ofl_msg_stats_reply_header   header; /* OFPST_PROCESSOR */
+	uint32_t total_num;				/* total number of PP instances on datapath */
+	uint32_t total_max;				/* total number of PP instances supported */
+	size_t   stats_num;
+	struct ofl_processor_stat stats[0];	/* list of PP stat entries */
+};
+
+struct ofl_msg_stats_reply_processor_inst {
+    struct ofl_msg_stats_reply_header   header; /* OFPST_PROCESSOR_INST */
+	size_t stats_num;
+	struct ofl_processor_inst_stat stats[0];	/* number of stats inferred from message length */
+};
+
 struct ofl_msg_stats_reply_experimenter {
     struct ofl_msg_stats_reply_header   header; /* OFPST_EXPERIMENTER */
 
@@ -383,6 +417,16 @@ struct ofl_msg_queue_get_config_reply {
     struct ofl_packet_queue **queues; /* List of configured queues. */
 };
 
+/**********************************
+ * Packet processor control message
+ * *******************************/
+
+struct ofl_msg_processor_ctrl {
+    struct ofl_msg_header header;
+    uint32_t proc_id;
+    uint32_t type;
+    uint8_t  data[0];
+};
 
 
 /****************************************************************************

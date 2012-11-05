@@ -19,6 +19,7 @@
 #include "ofl_structs.h"
 #include "ofl_utils.h"
 #include "ofl_print.h"
+#include "packetproc/packetproc_types.h"
 
 /****************************************************************************
  * Functions for unpacking ofp wire format to ofl structures.
@@ -594,6 +595,94 @@ ofl_msg_unpack_table_mod(struct ofp_header *src, size_t *len, struct ofl_msg_hea
 }
 
 static ofl_err
+ofl_msg_unpack_processor_mod(struct ofp_header *src, size_t *len, struct ofl_msg_header **msg, char *errbuf) {
+    struct ofp_processor_mod *sm;
+    struct ofl_msg_processor_mod *dm;
+
+    if (*len < sizeof(struct ofp_processor_mod)) {
+        if (errbuf != NULL) {
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "Received PROCESSOR_MOD message has invalid length (%zu).", *len);
+        }
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    *len -= sizeof(struct ofp_processor_mod);
+
+    sm = (struct ofp_processor_mod *)src;
+
+	struct PP_types_list *pp_type  = pp_types_get(sm->type);
+
+	if (pp_type == NULL) {
+        if (errbuf != NULL) {
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "Not supported type (%u)", sm->type);
+        }
+        return 1;
+	}
+
+	if (*len < pp_type->PP_msg_data_len) {
+        if (errbuf != NULL) {
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "Received PROCESSOR_MOD message has invalid length (%zu)", *len);
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "for type %s", PP_types_name[pp_type->PP_type]);
+        }
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+	}
+    *len -= pp_type->PP_msg_data_len;
+
+    dm = (struct ofl_msg_processor_mod *)malloc(sizeof(struct ofl_msg_processor_mod) + pp_type->PP_msg_data_len);
+    dm->type = ntohl(sm->type);
+    dm->proc_id = ntohl(sm->proc_id);
+    dm->command = ntohs(sm->command);
+
+	pp_type->unpack_cb(sm->data, dm->data, sm->header.type, errbuf);
+    
+    *msg = (struct ofl_msg_header *)dm;
+
+	return 0;
+}
+
+static ofl_err
+ofl_msg_unpack_processor_ctrl(struct ofp_header *src, size_t *len, struct ofl_msg_header **msg, char *errbuf) {
+    struct ofp_processor_ctrl *sm;
+    struct ofl_msg_processor_ctrl *dm;
+
+    if (*len < sizeof(struct ofp_processor_ctrl)) {
+        if (errbuf != NULL) {
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "Received PROCESSOR_MOD message has invalid length (%zu).", *len);
+        }
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+    *len -= sizeof(struct ofp_processor_ctrl);
+
+    sm = (struct ofp_processor_ctrl *)src;
+
+	struct PP_types_list *pp_type  = pp_types_get(sm->type);
+
+	if (pp_type == NULL) {
+        if (errbuf != NULL) {
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "Not supported type (%u)", sm->type);
+        }
+        return 1;
+	}
+
+	if (*len < pp_type->PP_msg_data_len) {
+        if (errbuf != NULL) {
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "Received PROCESSOR_MOD message has invalid length (%zu)", *len);
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "for type %s", PP_types_name[pp_type->PP_type]);
+        }
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+	}
+    *len -= pp_type->PP_msg_data_len;
+
+    dm = (struct ofl_msg_processor_ctrl *)malloc(sizeof(struct ofl_msg_processor_ctrl) + pp_type->PP_msg_data_len);
+    dm->type = ntohl(sm->type);
+    dm->proc_id = ntohl(sm->proc_id);
+
+	pp_type->unpack_cb(sm->data, dm->data, sm->header.type, errbuf);
+    
+    *msg = (struct ofl_msg_header *)dm;
+
+	return 0;
+}
+static ofl_err
 ofl_msg_unpack_stats_request_flow(struct ofp_stats_request *os, size_t *len, struct ofl_msg_header **msg, struct ofl_exp *exp, char *errbuf) {
     struct ofp_flow_stats_request *sm;
     struct ofl_msg_stats_request_flow *dm;
@@ -732,6 +821,51 @@ ofl_msg_unpack_stats_request_empty(struct ofp_stats_request *os UNUSED_ATTR, siz
 }
 
 static ofl_err
+ofl_msg_unpack_stats_request_processor(struct ofp_stats_request *os, size_t *len, struct ofl_msg_header **msg, char *errbuf) {
+	struct ofp_processor_stats_request *sm;
+	struct ofl_msg_stats_request_processor *dm;
+
+	if (*len < sizeof(struct ofp_processor_stats_request)) {
+        if (errbuf != NULL) {
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "Received PROCESSOR stats request has invalid length (%zu).", *len);
+        }
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+	len -= sizeof(struct ofp_processor_stats_request);
+
+	sm = (struct ofp_processor_stats_request *)os->body;
+	dm = (struct ofl_msg_stats_request_processor *)malloc(sizeof(struct ofl_msg_stats_request_processor));
+
+	dm->type = ntohl(sm->type);
+
+	*msg = (struct ofl_msg_header *)dm;
+	return 0;
+}
+
+static ofl_err
+ofl_msg_unpack_stats_request_processor_inst(struct ofp_stats_request *os, size_t *len, struct ofl_msg_header **msg, char *errbuf) {
+	struct ofp_processor_inst_stats_request *sm;
+	struct ofl_msg_stats_request_processor_inst *dm;
+
+	if (*len < sizeof(struct ofp_processor_inst_stats_request)) {
+        if (errbuf != NULL) {
+            snprintf(errbuf, OFL_ERRBUF_SIZE, "Received PROCESSOR stats request has invalid length (%zu).", *len);
+        }
+        return ofl_error(OFPET_BAD_REQUEST, OFPBRC_BAD_LEN);
+    }
+	len -= sizeof(struct ofp_processor_inst_stats_request);
+
+	sm = (struct ofp_processor_inst_stats_request *)os->body;
+	dm = (struct ofl_msg_stats_request_processor_inst *)malloc(sizeof(struct ofl_msg_stats_request_processor_inst));
+
+	dm->proc_id = ntohl(sm->proc_id);
+	dm->input_id = ntohl(sm->input_id);
+
+	*msg = (struct ofl_msg_header *)dm;
+	return 0;
+}
+
+static ofl_err
 ofl_msg_unpack_stats_request(struct ofp_header *src, size_t *len, struct ofl_msg_header **msg, struct ofl_exp *exp, char *errbuf) {
     struct ofl_msg_stats_request_header *ofls;
     struct ofp_stats_request *os;
@@ -776,6 +910,14 @@ ofl_msg_unpack_stats_request(struct ofp_header *src, size_t *len, struct ofl_msg
     case OFPST_GROUP_DESC: {
         error = ofl_msg_unpack_stats_request_empty(os, len, msg);
         break;
+    }
+	case OFPST_PROCESSOR: {
+        error = ofl_msg_unpack_stats_request_processor(os, len, msg, errbuf);
+	    break;
+    }
+	case OFPST_PROCESSOR_INST: {
+        error = ofl_msg_unpack_stats_request_processor_inst(os, len, msg, errbuf);
+	    break;
     }
     case OFPST_EXPERIMENTER: {
         if (exp == NULL || exp->stats == NULL || exp->stats->reply_unpack == NULL) {
@@ -1061,6 +1203,70 @@ ofl_msg_unpack_stats_reply_group_desc(struct ofp_stats_reply *os, size_t *len, s
 }
 
 static ofl_err
+ofl_msg_unpack_stats_reply_processor(struct ofp_stats_reply *os, size_t *len, struct ofl_msg_header **msg, char *errbuf) {
+    struct ofp_processor_stats_reply *stat;
+    struct ofl_msg_stats_reply_processor *dm;
+    ofl_err error;
+	size_t stats_num;
+    size_t i;
+
+    stat = (struct ofp_processor_stats_reply *)os->body;
+
+    error = ofl_utils_count_ofp_processor_stats(stat, *len, &stats_num, errbuf);
+    if (error) {
+        return error;
+    }
+
+	size_t sum_size = stats_num * sizeof(struct ofl_processor_stat) + sizeof(struct ofl_msg_stats_reply_processor);
+    dm = (struct ofl_msg_stats_reply_processor *)malloc(sum_size);
+
+    for (i = 0; i < stats_num; i++) {
+        error = ofl_structs_processor_stat_unpack(&(stat->stats[i]), len, &(dm->stats[i]), errbuf);
+        if (error) {
+            free (dm);
+            return error;
+        }
+    }
+
+	dm->stats_num = stats_num;
+
+    *msg = (struct ofl_msg_header *)dm;
+    return 0;
+}
+
+static ofl_err
+ofl_msg_unpack_stats_reply_processor_inst(struct ofp_stats_reply *os, size_t *len, struct ofl_msg_header **msg, char *errbuf) {
+    struct ofp_processor_inst_stats_reply *stat;
+    struct ofl_msg_stats_reply_processor_inst *dm;
+    ofl_err error;
+	size_t stats_num;
+    size_t i;
+
+    stat = (struct ofp_processor_inst_stats_reply *)os->body;
+
+    error = ofl_utils_count_ofp_processor_inst_stats(stat, *len, &stats_num, errbuf);
+    if (error) {
+        return error;
+    }
+
+	size_t sum_size = stats_num * sizeof(struct ofl_processor_inst_stat) + sizeof(struct ofl_msg_stats_reply_processor_inst);
+    dm = (struct ofl_msg_stats_reply_processor_inst *)malloc(sum_size);
+
+    for (i = 0; i < stats_num; i++) {
+        error = ofl_structs_processor_inst_stat_unpack(&(stat->stats[i]), len, &(dm->stats[i]), errbuf);
+        if (error) {
+            free (dm);
+            return error;
+        }
+    }
+
+	dm->stats_num = stats_num;
+
+    *msg = (struct ofl_msg_header *)dm;
+    return 0;
+}
+
+static ofl_err
 ofl_msg_unpack_stats_reply(struct ofp_header *src, size_t *len, struct ofl_msg_header **msg, struct ofl_exp *exp, char *errbuf) {
     struct ofl_msg_stats_reply_header *ofls;
     struct ofp_stats_reply *os;
@@ -1108,6 +1314,14 @@ ofl_msg_unpack_stats_reply(struct ofp_header *src, size_t *len, struct ofl_msg_h
     case OFPST_GROUP_DESC: {
         error = ofl_msg_unpack_stats_reply_group_desc(os, len, msg, exp, errbuf);
         break;
+    }
+	case OFPST_PROCESSOR: {
+        error = ofl_msg_unpack_stats_reply_processor(os, len, msg, errbuf);
+	    break;
+    }
+	case OFPST_PROCESSOR_INST: {
+        error = ofl_msg_unpack_stats_reply_processor_inst(os, len, msg, errbuf);
+	    break;
     }
     case OFPST_EXPERIMENTER: {
         if (exp == NULL || exp->stats == NULL || exp->stats->reply_unpack == NULL) {
@@ -1325,6 +1539,9 @@ ofl_msg_unpack(uint8_t *buf, size_t buf_len, struct ofl_msg_header **msg, uint32
         case OFPT_TABLE_MOD:
             error = ofl_msg_unpack_table_mod(oh, &len, msg, errbuf);
             break;
+        case OFPT_PROCESSOR_MOD:
+            error = ofl_msg_unpack_processor_mod(oh, &len, msg, errbuf);
+            break;
 
         /* Statistics messages. */
         case OFPT_STATS_REQUEST:
@@ -1347,6 +1564,12 @@ ofl_msg_unpack(uint8_t *buf, size_t buf_len, struct ofl_msg_header **msg, uint32
         case OFPT_QUEUE_GET_CONFIG_REPLY:
             error = ofl_msg_unpack_queue_get_config_reply(oh, &len, msg, errbuf);
             break;
+
+	    /* Packet processor message */
+        case OFPT_PROCESSOR_CTRL:
+            error = ofl_msg_unpack_processor_ctrl(oh, &len, msg, errbuf);
+            break;
+
         default: {
             if (errbuf != NULL) {
                 snprintf(errbuf, OFL_ERRBUF_SIZE, "Trying to unpack unknown message type.");

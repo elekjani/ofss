@@ -34,6 +34,8 @@
 #include "pipeline_packet.h"
 #include "flow_table.h"
 #include "group_table.h"
+#include "packetproc/packetproc_types.h"
+#include "packetproc/packetproc.h"
 
 /* Send an error message to the controller(s). */
 static void
@@ -242,6 +244,36 @@ stats_queue(struct dp_loop *dp_loop, struct dp_msg *msg) {
     return 0;
 }
 
+static ofl_err
+packetproc_stats(struct dp_loop *dp_loop, struct dp_msg *msg){ 
+    struct packetproc *packetproc = dp_loop->dp->packetproc;
+    struct ofl_msg_stats_reply_header *rep;
+    //TODO: error handling
+    if(msg->msg->type == OFPST_PROCESSOR) {
+        struct ofl_msg_stats_request_processor *req = (struct ofl_msg_stats_request_processor *)(msg->msg);
+
+        if( req->type == 0xFFFFFFFF ) {
+            rep = packetproc_stats_reply_all(packetproc);
+        } else {
+            rep = packetproc_stats_reply(packetproc, req->type);
+        }
+    } else if(msg->msg->type == OFPST_PROCESSOR_INST) {
+        struct ofl_msg_stats_request_processor_inst *req = (struct ofl_msg_stats_request_processor_inst *)(msg->msg);
+
+        if( req->input_id == 0xFFFFFFFF ) {
+            rep = packetproc_inst_stats_reply_all(packetproc, req->proc_id);
+        } else {
+            rep = packetproc_inst_stats_reply(packetproc, req->proc_id, req->input_id);
+        }
+
+    }
+
+    if (rep != NULL) {
+        ctrl_send_msg(dp_loop->ctrl, msg->conn_id, msg->xid, (struct ofl_msg_header *)rep);
+    }
+
+    return 0;
+}
 /* Handle port mod request. */
 static ofl_err
 port_mod(struct dp_loop *dp_loop, struct dp_msg *msg) {
@@ -510,6 +542,30 @@ flow_mod(struct dp_loop *dp_loop, struct dp_msg *msg) {
     return 0;
 }
 
+static ofl_err
+proc_mod(struct dp_loop *dp_loop, struct dp_msg *msg) {
+    struct dp *dp = dp_loop->dp;
+    struct ofl_msg_processor_mod *req = (struct ofl_msg_processor_mod *)(msg->msg);
+
+    //TODO: error handling....
+    if ((req->proc_id & 0xffff0000) != 0) {
+        if((req->proc_id != 0xffffffff) || //NONE
+           (req->proc_id != 0xfffffffe) ) { //ALL
+            //invalid proc_id
+            //send_error or what?
+            logger_log(dp_loop->logger_ctrl, LOG_INFO, "Processor ID is in reserved intervals. (%u)", req->proc_id);
+        }
+    }
+
+	struct PP_types_list *pp_type = pp_types_get(req->type);
+
+    pp_type->mod_cb(dp->packetproc, req->type, req->proc_id, req->command, req->data);
+
+    ofl_msg_free(msg->msg, OFL_NO_EXP, NULL);
+
+    return 0;
+}
+
 /* Handle table mod request. */
 static ofl_err
 table_mod(struct dp_loop *dp_loop, struct dp_msg *msg) {
@@ -573,6 +629,12 @@ stats(struct dp_loop *dp_loop, struct dp_msg *msg) {
         }
         case OFPST_QUEUE: {
             return stats_queue(dp_loop, msg);
+        }
+        case OFPST_PROCESSOR: {
+            return packetproc_stats(dp_loop, msg);
+        }
+        case OFPST_PROCESSOR_INST: {
+            return packetproc_stats(dp_loop, msg);
         }
         default: {
             logger_log(dp_loop->logger_ctrl, LOG_INFO, "Received unexpected stats type: %d.", stat->type);
@@ -640,6 +702,10 @@ dp_ctrl_recv_msg(struct dp_loop *dp_loop, struct dp_msg *msg) {
         }
         case OFPT_QUEUE_GET_CONFIG_REQUEST: {
             error = queue_req(dp_loop, msg);
+            break;
+        }
+        case OFPT_PROCESSOR_MOD: {
+            error = proc_mod(dp_loop, msg);
             break;
         }
         default: {

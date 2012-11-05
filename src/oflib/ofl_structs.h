@@ -77,6 +77,14 @@ struct ofl_instruction_actions {
     struct ofl_action_header **actions;
 };
 
+
+struct ofl_instruction_goto_processor {
+    struct ofl_instruction_header header;
+
+    uint32_t processor_id;
+    uint32_t input_id;
+};
+
 /* Instruction structure for experimental instructions */
 struct ofl_instruction_experimenter {
     struct ofl_instruction_header   header; /* OFPIT_EXPERIMENTER */
@@ -254,6 +262,19 @@ struct ofl_group_desc_stats {
     struct ofl_bucket **buckets;
 };
 
+struct ofl_processor_stat {
+	uint32_t type;
+	uint32_t current;	/* current number of instances */
+	uint32_t max;		/* max number of instances supported */
+};
+
+struct ofl_processor_inst_stat {
+	uint32_t proc_id;
+	uint32_t input_id;
+	uint32_t flow_count; 		/* Number of flows directed to this input */
+	uint32_t processor_count;   /* Number of processors directed to this input */
+};
+
 
 /****************************************************************************
  * Functions for (un)packing structures
@@ -300,6 +321,11 @@ ofl_structs_bucket_counter_pack(struct ofl_bucket_counter *src, struct ofp_bucke
 ssize_t
 ofl_structs_match_pack(struct ofl_match_header *src, struct ofp_match *dst, struct ofl_exp *exp, char *errbuf);
 
+size_t
+ofl_structs_processor_stat_pack(struct ofl_processor_stat *src, struct ofp_processor_stat *dst);
+
+size_t
+ofl_structs_processor_inst_stat_pack(struct ofl_processor_inst_stat *src, struct ofp_processor_inst_stat *dst);
 
 
 ofl_err
@@ -341,6 +367,11 @@ ofl_structs_bucket_counter_unpack(struct ofp_bucket_counter *src, size_t *len, s
 ofl_err
 ofl_structs_match_unpack(struct ofp_match *src, size_t *len, struct ofl_match_header **dst, struct ofl_exp *exp, char *errbuf);
 
+ofl_err
+ofl_structs_processor_stat_unpack(struct ofp_processor_stat *src, size_t *len, struct ofl_processor_stat *dst, char *errbuf);
+
+ofl_err
+ofl_structs_processor_inst_stat_unpack(struct ofp_processor_inst_stat *src, size_t *len, struct ofl_processor_inst_stat *dst, char *errbuf);
 
 
 /****************************************************************************
@@ -418,6 +449,12 @@ ofl_utils_count_ofp_packet_queues(void *data, size_t data_len, size_t *count, ch
 
 ofl_err
 ofl_utils_count_ofp_queue_props(void *data, size_t data_len, size_t *count, char *errbuf);
+
+ofl_err
+ofl_utils_count_ofp_processor_stats(void *data, size_t data_len, size_t *count, char *errbuf);
+
+ofl_err
+ofl_utils_count_ofp_processor_inst_stats(void *data, size_t data_len, size_t *count, char *errbuf);
 
 
 size_t
@@ -558,5 +595,11 @@ ofl_structs_group_desc_stats_to_string(struct ofl_group_desc_stats *s, struct of
 
 void
 ofl_structs_group_desc_stats_print(FILE *stream, struct ofl_group_desc_stats *s, struct ofl_exp *exp);
+
+void
+ofl_structs_processor_stat_print(FILE *stream, struct ofl_processor_stat *s);
+
+void
+ofl_structs_processor_inst_stat_print(FILE *stream, struct ofl_processor_inst_stat *s);
 
 #endif /* OFL_STRUCTS_H */

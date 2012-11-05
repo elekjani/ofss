@@ -211,7 +211,9 @@ ofl_msg_free(struct ofl_msg_header *msg, struct ofl_exp *exp, char *errbuf) {
             return ofl_msg_free_group_mod((struct ofl_msg_group_mod *)msg, true, exp, errbuf);
         }
         case OFPT_PORT_MOD:
-        case OFPT_TABLE_MOD: {
+        case OFPT_TABLE_MOD:
+        case OFPT_PROCESSOR_MOD:
+        case OFPT_PROCESSOR_CTRL: {
             break;
         }
         case OFPT_STATS_REQUEST: {

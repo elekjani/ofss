@@ -54,22 +54,24 @@ struct dp_port {
 };
 
 struct dp {
-    size_t      uid;
-    of_dpid_t   dpid;
-    struct logger      *logger;
+    size_t                    uid;
+    of_dpid_t                 dpid;
+    struct logge             *logger;
 
-    struct ctrl         *ctrl;
+    struct ctrl              *ctrl;
 
-    struct dp_port   *ports[MAX_PORTS];
-    size_t            ports_num;
-    pthread_rwlock_t *ports_lock;
+    struct dp_port           *ports[MAX_PORTS];
+    size_t                    ports_num;
+    pthread_rwlock_t         *ports_lock;
 
-    pthread_t        *thread;
-    struct ev_loop   *loop;
+    pthread_t                *thread;
+    struct ev_loop           *loop;
 
-    struct mbox      *msg_mbox;
+    struct mbox              *msg_mbox;
 
-    struct dp_loop   *dp_loop;
+    struct dp_loop           *dp_loop;
+
+    struct packetproc *packetproc;
 };
 
 struct dp_desc;
@@ -114,6 +116,14 @@ dp_pl_pkt_to_ctrl(struct dp_loop *dp_loop, uint16_t max_len, struct pl_pkt *pl_p
 void
 dp_pl_pkt_to_port(struct dp_loop *dp_loop, of_port_no_t port, uint16_t max_len, struct pl_pkt *pl_pkt);
 
+void
+dp_pl_pkt_to_pp(struct dp_loop *dp_loop, struct pl_pkt *pl_pkt, uint32_t process_id, uint32_t input_id);
+
+void
+dp_pl_packetproc_add_flow_ref(struct dp_loop *dp_loop, uint32_t processor_id, uint32_t input_id, uint32_t flow_ref);
+
+void
+dp_pl_packetproc_del_flow_ref(struct dp_loop *dp_loop, uint32_t processor_id, uint32_t input_id, uint32_t flow_ref);
 
 void
 dp_pl_group_add_flow_ref(struct dp_loop *dp_loop, of_groupid_t group_id, uint32_t flow_ref);

@@ -38,6 +38,10 @@
 #define LOGGER_NAME_PORT_DRV_PCAP       "drv-pcap"
 #define LOGGER_NAME_PORT_DRV_PCAP_PORT  "drv-pcap(%u)"
 
+#define LOGGER_NAME_PP                  "pp(%u)"
+#define LOGGER_NAME_PP_LOOP             "pp(%u)-loop"
+#define LOGGER_NAME_PP_PROC             "pp(%u)-proc(%u)"
+
 #define LOGGER_NAME_LOGGER_MGR          "logger-mgr"
 
 #define LOGGER_NAME_THREAD_ID           "threads"

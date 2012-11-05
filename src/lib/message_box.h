@@ -23,6 +23,9 @@ struct mbox *
 mbox_new(struct ev_loop *loop, void *private, mbox_cb_t cb);
 
 void
+mbox_free(struct mbox *mbox);
+
+void
 mbox_notify(struct mbox *mbox);
 
 void

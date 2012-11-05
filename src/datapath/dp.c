@@ -36,6 +36,7 @@
 #include "flow_table.h"
 #include "group_table.h"
 #include "pipeline.h"
+#include "packetproc/packetproc.h"
 
 /*
  * Provides DP related functions. These are used by the manager
@@ -115,6 +116,13 @@ dp_new(size_t uid, of_dpid_t dpid) {
     }
 
     dp_loop->ctrl = dp->ctrl;
+
+	dp->packetproc = packetproc_new(dp);
+	if (dp->packetproc == NULL) {
+        logger_log(dp->logger, LOG_WARN, "Error creating packet processor for datapath %"PRIx64".", dpid);
+        //TODO: free structures
+        return NULL;
+    }
 
     dp->thread = malloc(sizeof(pthread_t));
     dp->loop = ev_loop_new(0/*flags*/);
@@ -411,6 +419,29 @@ dp_pl_pkt_to_port(struct dp_loop *dp_loop, of_port_no_t port, uint16_t max_len, 
     }
 }
 
+/* Used by the pipeline to send a packet to packetproc.
+ * NOTE: for now this always copies the packet, which is probably inefficient. */
+void
+dp_pl_pkt_to_pp(struct dp_loop *dp_loop, struct pl_pkt *pl_pkt, uint32_t process_id, uint32_t input_id) {
+    struct dp *dp = dp_loop->dp;
+    pp_send_msg(dp->packetproc, pl_pkt, process_id, input_id);
+}
+
+/* Requests the pipeline to add a flow ref to a given packetproc.
+ * Used by flow tables to communicate to packetproc.*/
+void
+dp_pl_packetproc_add_flow_ref(struct dp_loop *dp_loop, uint32_t processor_id, uint32_t input_id, uint32_t flow_ref) {
+    struct dp *dp = dp_loop->dp;
+    packetproc_add_flow_ref(dp->packetproc, processor_id, input_id, flow_ref);
+}
+
+/* Requests the pipeline to remove a flow ref from a given pakcetproc.
+ * Used by flow tables to communicate to packetproc .*/
+void
+dp_pl_packetproc_del_flow_ref(struct dp_loop *dp_loop, uint32_t processor_id, uint32_t input_id, uint32_t flow_ref) {
+    struct dp *dp = dp_loop->dp;
+    packetproc_del_flow_ref(dp->packetproc, processor_id, input_id, flow_ref);
+}
 
 /* Requests the pipeline to add a flow ref to a given group.
  * Used by flow tables to communicate to group tables.*/
