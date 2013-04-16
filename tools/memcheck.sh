@@ -7,6 +7,7 @@ valgrind                               \
   --read-var-info=yes                  \
   --sim-hints=lax-ioctls               \
   --suppressions=tools/valgrind.supp   \
+  --workaround-gcc296-bugs=yes         \
   ./ofss $*
 
 

@@ -75,6 +75,6 @@ pipeline_process(struct dp_loop *dp_loop, struct pl_pkt *pl_pkt) {
 
     logger_log(dp_loop->logger_pl, LOG_DEBUG, "Finished pipeline, executing action set.");
     action_set_exec(dp_loop, pl_pkt->act_set, pl_pkt);
-    pl_pkt_free(pl_pkt, true);
+    //pl_pkt_free(pl_pkt, true);  //no need to free, pcap driver make that for us
     logger_log(dp_loop->logger_pl, LOG_DEBUG, "Pipeline done.");
 }

@@ -18,6 +18,7 @@
 #include "ofl_messages.h"
 #include "ofl_structs.h"
 #include "ofl_utils.h"
+#include "packetproc/packetproc_types.h"
 
 /* Frees the OFlib stats request message along with any dynamically allocated
  * structures. */
@@ -142,6 +143,22 @@ ofl_msg_free_stats_reply(struct ofl_msg_stats_reply_header *msg, struct ofl_exp 
     return 0;
 }
 
+int
+ofl_msg_free_processor_mod(struct ofl_msg_processor_mod *msg, char *errbuf) {
+    struct PP_types_list *pp_type = pp_types_get(msg->type);
+    pp_type->free_cb(msg->data, msg->header.type);
+
+    return 0;
+}
+
+int
+ofl_msg_free_processor_ctrl(struct ofl_msg_processor_ctrl *msg, char *errbuf) {
+    struct PP_types_list *pp_type = pp_types_get(msg->type);
+    pp_type->free_cb(msg->data, msg->header.type);
+
+    return 0;
+}
+
 
 
 int
@@ -213,7 +230,13 @@ ofl_msg_free(struct ofl_msg_header *msg, struct ofl_exp *exp, char *errbuf) {
         case OFPT_PORT_MOD:
         case OFPT_TABLE_MOD: {
             break;
+         }
+        case OFPT_PROCESSOR_MOD: {
+            return ofl_msg_free_processor_mod((struct ofl_msg_processor_mod *)msg, errbuf);;
         }
+        case OFPT_PROCESSOR_CTRL: {
+            return ofl_msg_free_processor_ctrl((struct ofl_msg_processor_ctrl *)msg, errbuf);;
+        } 
         case OFPT_STATS_REQUEST: {
             return ofl_msg_free_stats_request((struct ofl_msg_stats_request_header *)msg, exp, errbuf);
         }

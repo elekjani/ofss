@@ -38,6 +38,8 @@ dp_add_port(struct dp *dp, of_port_no_t port_no, const char *driver_name, const 
 void
 dp_add_ctrl(struct dp *dp, const char *trans, const char *host, const char *port);
 
+void
+dp_add_pp(struct dp *dp);
 
 of_dpid_t
 dp_get_dpid(const struct dp *dp);

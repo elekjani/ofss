@@ -33,24 +33,92 @@
 static void
 event_loop_packet_in_cb(struct ev_loop *loop, ev_io *w, int revents);
 
-/* Opens a port with the given name and uid. */
-struct pcap_port * MALLOC_ATTR
-pcap_port_open(struct pcap_drv *pcap_drv, size_t id, const char *name) {
+struct pcap_port*
+pcap_reopen(struct pcap_port *pcap_port) {
     char errbuf[PCAP_ERRBUF_SIZE];
+    struct pcap_drv *pcap_drv = pcap_port->drv;
 
-    pcap_t *pcap = pcap_open_live(name, PCAP_SNAPLEN, true/*promisc*/, -1/*to_ms*/, errbuf);
+    if (pcap_port->pcap != NULL) {
+        pcap_close(pcap_port->pcap);
+    }
+
+    pcap_port->pcap = pcap_open_live(pcap_port->name, PCAP_SNAPLEN, true/*promisc*/, -1/*to_ms*/, errbuf);
+    if (pcap_port->pcap == NULL) {
+        logger_log(pcap_drv->logger, LOG_ERR, "Unable to open device %s: %s.", pcap_port->name, errbuf);
+        return NULL;
+    }
+
+    if(pcap_setnonblock(pcap_port->pcap, true, errbuf) != 0) {
+        logger_log(pcap_drv->logger, LOG_ERR, "Unable to set device to promisc %s: %s.", pcap_port->name, errbuf);
+        return NULL;
+    }
+
+    if(pcap_setdirection(pcap_port->pcap, PCAP_D_IN) != 0) {
+        logger_log(pcap_drv->logger, LOG_ERR, "Unable to set device direction %s: %s.", pcap_port->name, pcap_geterr(pcap_port->pcap));
+        return NULL;
+    }
+
+    pcap_port->fd      = pcap_fileno(pcap_port->pcap);
+
+    ev_io_stop(pcap_port->drv->loop, pcap_port->watcher);
+    free(pcap_port->watcher);
+
+    pcap_port->watcher = malloc(sizeof(ev_io));
+    pcap_port->watcher->data = pcap_port;
+    ev_io_init(pcap_port->watcher, event_loop_packet_in_cb, pcap_port->fd, EV_READ);
+    pcap_port_fill(pcap_port);
+
+    return pcap_port;
+}
+
+struct pcap_port *
+pcap_open(struct pcap_port *pcap_port) {
+    char errbuf[PCAP_ERRBUF_SIZE];
+    struct pcap_drv *pcap_drv = pcap_port->drv;
+
+    pcap_t *pcap = NULL;
+    pcap = pcap_open_live(pcap_port->name, PCAP_SNAPLEN, true/*promisc*/, -1/*to_ms*/, errbuf);
     if (pcap == NULL) {
-        logger_log(pcap_drv->logger, LOG_ERR, "Unable to open device %s: %s.", name, errbuf);
+        logger_log(pcap_drv->logger, LOG_ERR, "Unable to open device %s: %s.", pcap_port->name, errbuf);
         return NULL;
     }
 
     if(pcap_setnonblock(pcap, true, errbuf) != 0) {
-        logger_log(pcap_drv->logger, LOG_ERR, "Unable to set device to promisc %s: %s.", name, errbuf);
+        logger_log(pcap_drv->logger, LOG_ERR, "Unable to set device to promisc %s: %s.", pcap_port->name, errbuf);
         return NULL;
     }
 
     if(pcap_setdirection(pcap, PCAP_D_IN) != 0) {
-        logger_log(pcap_drv->logger, LOG_ERR, "Unable to set device direction %s: %s.", name, pcap_geterr(pcap));
+        logger_log(pcap_drv->logger, LOG_ERR, "Unable to set device direction %s: %s.", pcap_port->name, pcap_geterr(pcap));
+        return NULL;
+    }
+
+    pcap_port->pcap    = pcap;
+    pcap_port->fd      = pcap_fileno(pcap);
+
+    pcap_port->watcher = malloc(sizeof(ev_io));
+    pcap_port->watcher->data = pcap_port;
+    ev_io_init(pcap_port->watcher, event_loop_packet_in_cb, pcap_port->fd, EV_READ);
+    pcap_port_fill(pcap_port);
+
+    return pcap_port;
+}
+
+/* Opens a port with the given name and uid. */
+struct pcap_port * MALLOC_ATTR
+pcap_port_open(struct pcap_drv *pcap_drv, size_t id, const char *name) {
+
+    struct linux_port *linux_port;
+    HASH_FIND_STR(pcap_drv->linux_ports_map, name, linux_port);
+    if(linux_port == NULL) {
+        logger_log(pcap_drv->logger, LOG_ERR, "Unable to get interface flags");
+        logger_log(pcap_drv->logger, LOG_ERR, "There is no linux port for %s", name);
+        return NULL;
+    }
+
+    struct linux_port_flags *flags = &linux_port->flags;
+    if (flags == NULL) {
+        logger_log(pcap_drv->logger, LOG_ERR, "Unable to get interface flags %s", name);
         return NULL;
     }
 
@@ -60,12 +128,6 @@ pcap_port_open(struct pcap_drv *pcap_drv, size_t id, const char *name) {
     pcap_port->name    = strdup(name);
     pcap_port->logger  = logger_mgr_get(LOGGER_NAME_PORT_DRV_PCAP_PORT, id);
 
-    pcap_port->pcap    = pcap;
-    pcap_port->fd      = pcap_fileno(pcap);
-
-    pcap_port->watcher = malloc(sizeof(ev_io));
-    pcap_port->watcher->data = pcap_port;
-    ev_io_init(pcap_port->watcher, event_loop_packet_in_cb, pcap_port->fd, EV_READ);
 
     pcap_port->dp_uid = 0; // invalidity marked by port_no
     pcap_port->dp_port_no = OF_NO_PORT;
@@ -79,10 +141,17 @@ pcap_port_open(struct pcap_drv *pcap_drv, size_t id, const char *name) {
     memset(pcap_port->of_stats, '\0', sizeof(struct ofl_port_stats));
     pcap_port->of_port->name = strdup(name);
 
-    pcap_port_fill(pcap_port);
-
     pcap_port->stats_mutex = malloc(sizeof(pthread_mutex_t));
     pthread_mutex_init(pcap_port->stats_mutex, NULL);
+
+    if(flags->UP && flags->RUNNING) {
+        return pcap_open(pcap_port);
+    } else {
+        pcap_port->pcap = NULL;
+        pcap_port->fd   = -1;
+
+        pcap_port->watcher = NULL;
+    }
 
     return pcap_port;
 }

@@ -31,6 +31,8 @@
 #undef icmp_type
 #undef icmp_code
 
+#define ETH_ADDR_SET(ea, a, b, c, d, e, f) \
+    ea[0] = a; ea[1] = b; ea[2] = c; ea[3] = d; ea[4] = e; ea[5] = f
 #define ETH_ADDR_LEN           6
 struct eth_header {
     uint8_t  eth_dst[ETH_ADDR_LEN];
@@ -135,6 +137,7 @@ struct ipv4_header {
 #define IP_TYPE_ICMP   1
 #define IP_TYPE_TCP    6
 #define IP_TYPE_UDP   17
+#define IP_TYPE_GRE   47
 #define IP_TYPE_SCTP 132
 
 #define IP_ECN_MASK  0x03
@@ -177,6 +180,13 @@ struct sctp_header {
     uint16_t sctp_dst;
     uint32_t sctp_verif;
     uint32_t sctp_csum;
+} PACKED_ATTR;
+
+struct gre_header {
+    uint16_t flags_version;
+    uint16_t protocol_type;
+    uint16_t checksum;
+    uint16_t reserved;
 } PACKED_ATTR;
 
 #endif /* PACKETS_H */

@@ -16,7 +16,13 @@
 struct pcap_port;
 struct pcap_drv;
 
+struct pcap_port*
+pcap_reopen(struct pcap_port *pcap_port);
+
 struct pcap_port *
+pcap_open(struct pcap_port *pcap_port);
+
+struct pcap_port*
 pcap_port_open(struct pcap_drv *pcap_drv, size_t id, const char *name);
 
 #endif /* PCAP_PORT_H */

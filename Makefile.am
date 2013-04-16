@@ -49,6 +49,15 @@ ofss_SOURCES =                               \
     src/port/pcap/pcap_drv.c                 \
     src/port/pcap/pcap_drv_linux.c           \
     src/port/pcap/pcap_port.c                \
+	src/packetproc/default_pp/default_packetproc.c		 \
+	src/packetproc/packetproc.c		 		 \
+	src/packetproc/packetproc_types.c		 \
+	src/packetproc/lldp_pp/lldp_LLDPU.c      \
+	src/packetproc/lldp_pp/lldp_mib.c        \
+	src/packetproc/lldp_pp/lldp_msg.c        \
+	src/packetproc/lldp_pp/lldp_packetproc.c \
+	src/packetproc/gre_pp/gre_packetproc.c   \
+	src/packetproc/gre_pp/gre_pkt.c          \
     src/ofss.c
 
 #NOTE: autoconf adds "-g -O2" by default

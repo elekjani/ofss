@@ -130,3 +130,12 @@ mbox_send_limit(struct mbox *mbox, struct list_node *msg, size_t queue_len) {
     ev_async_send(mbox->loop, mbox->watcher);
     return true;
 }
+
+void
+mbox_free(struct mbox *mbox) {
+	ev_async_stop(mbox->loop, mbox->watcher);
+	free(mbox->watcher);
+	pthread_mutex_destroy(mbox->mutex);
+	free(mbox->mutex);
+	free(mbox);
+}

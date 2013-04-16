@@ -25,6 +25,34 @@
 
 #define MAX_PORTS   16
 
+struct linux_port_flags {
+    uint16_t UP:1;
+    uint16_t BROADCAST:1;
+    uint16_t DEBUG:1;
+    uint16_t LOOPBACK:1;
+    uint16_t POINTOPOINT:1;
+    uint16_t NOTRAILERS:1;
+    uint16_t RUNNING:1;
+    uint16_t NOARP:1;
+    uint16_t PROMISC:1;
+    uint16_t ALLMULTI:1;
+    uint16_t MASTER:1;
+    uint16_t SLAVE:1;
+    uint16_t MULTICAST:1;
+    uint16_t PORTSEL:1;
+    uint16_t AUTOMEDIA:1;
+    uint16_t DYNAMIC:1;
+};
+
+struct linux_port{
+	char     name[20];
+	int      linux_if_index;
+
+    struct linux_port_flags flags;
+
+    UT_hash_handle   hh;
+};
+
 struct pcap_port {
     struct pcap_drv       *drv;
     size_t                 id;
@@ -64,6 +92,11 @@ struct pcap_drv {
     struct mbox       *notifier;
 
     struct pcap_drv_loop  *pcap_drv_loop;
+
+	int					  netlinkfd;
+	struct ev_io         *netlinkwatcher;
+
+	struct linux_port   *linux_ports_map;
 };
 
 struct pcap_drv_loop {
@@ -77,5 +110,7 @@ struct pcap_drv_loop {
 
 void pcap_port_fill(struct pcap_port *pcap_port);
 
+struct pcap_port_flags*
+pcap_get_port_flags(const char *name, char *errbuf);
 
 #endif /* PCAP_DRV_INT_H */

@@ -17,6 +17,9 @@
 #include <ev.h>
 #include <pthread.h>
 #include <pcap.h>
+#include <sys/socket.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h>
 #include "lib/compiler.h"
 #include "lib/message_box.h"
 #include "lib/pkt_buf.h"
@@ -28,10 +31,17 @@
 #include "pcap_drv_int.h"
 #include "pcap_port.h"
 
+#define IFLIST_REPLY_BUFFER 65536
 
 static bool event_loop_pkt_out_cb(void *pcap_port_, struct list_node *pkt_in_);
 
 static void *event_loop(void *pcap_drv_loop_);
+
+static void netlink_cb(struct ev_loop *l, struct ev_io *w, int revents);
+
+void linux_add_port(struct nlmsghdr *h, struct pcap_drv*);
+
+void linux_get_ports(struct pcap_drv*);
 
 /* Static initializer for the driver. */
 struct pcap_drv * MALLOC_ATTR
@@ -45,7 +55,7 @@ pcap_drv_init(struct port_drv *drv) {
     for (i=0; i<MAX_PORTS; i++) {
         pcap_drv->ports[i] = NULL;
     }
-    pcap_drv->ports_num = 0;
+    pcap_drv->ports_num = 1;
 
     pcap_drv->ports_rwlock = malloc(sizeof(pthread_rwlock_t));
     pthread_rwlock_init(pcap_drv->ports_rwlock, NULL);
@@ -63,6 +73,23 @@ pcap_drv_init(struct port_drv *drv) {
     ev_set_userdata(pcap_drv->loop, (void *)pcap_drv_loop);
 
     pcap_drv->notifier = mbox_new(pcap_drv->loop, NULL, NULL);
+
+    struct sockaddr_nl sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.nl_family = AF_NETLINK;
+    sa.nl_pid    = 0;
+    sa.nl_groups = RTMGRP_LINK;
+
+    pcap_drv->netlinkfd = socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+    bind(pcap_drv->netlinkfd, (struct sockaddr *) &sa, sizeof(sa));
+ 
+    pcap_drv->netlinkwatcher = malloc(sizeof(struct ev_io));
+    pcap_drv->netlinkwatcher->data = (void *)pcap_drv;
+    ev_io_init(pcap_drv->netlinkwatcher, netlink_cb, pcap_drv->netlinkfd, EV_READ);
+    ev_io_start(pcap_drv->loop, pcap_drv->netlinkwatcher);
+
+    pcap_drv->linux_ports_map = NULL;
+    linux_get_ports(pcap_drv);
 
     pthread_attr_t attr;
     pthread_attr_init(&attr);
@@ -159,10 +186,18 @@ pcap_drv_assign_dp_port(struct pcap_drv *drv, size_t drv_port_no, size_t dp_uid,
 
     pcap_port->pkt_mbox = mbox_new(drv->loop, pcap_port, event_loop_pkt_out_cb);
 
-    ev_io_start(drv->loop, pcap_port->watcher);
-    pthread_rwlock_unlock(pcap_port->rwlock);
+    struct linux_port *tmp;
+    HASH_FIND_STR(drv->linux_ports_map, pcap_port->name, tmp);
+    if(tmp == NULL) {
+        //TODO: error
+    }
+    if(tmp->flags.UP && tmp->flags.RUNNING) {
+        ev_io_start(drv->loop, pcap_port->watcher);
 
-    mbox_notify(drv->notifier); // needed for io watcher update on loop
+        mbox_notify(drv->notifier); // needed for io watcher update on loop
+    }
+
+    pthread_rwlock_unlock(pcap_port->rwlock);
     return true;
 }
 
@@ -171,6 +206,23 @@ static bool
 event_loop_pkt_out_cb(void *pcap_port_, struct list_node *pkt_buf_) {
     struct pcap_port *pcap_port = (struct pcap_port *)pcap_port_;
     struct pkt_buf *pkt_buf = (struct pkt_buf *)pkt_buf_;
+    struct pcap_drv *pcap_drv = pcap_port->drv;
+
+    pthread_rwlock_rdlock(pcap_drv->ports_rwlock);
+    struct linux_port *linux_port;
+    HASH_FIND(hh, pcap_drv->linux_ports_map, pcap_port->name, strlen(pcap_port->name), linux_port);
+    if (linux_port == NULL) {
+        logger_log(pcap_port->logger, LOG_WARN, "Linux_port for interface %s is NULL", pcap_port->name);
+        pthread_rwlock_unlock(pcap_drv->ports_rwlock);
+        return false;
+    }
+
+    if (pcap_port->pcap == NULL || !(linux_port->flags.UP && linux_port->flags.RUNNING)) {
+        logger_log(pcap_port->logger, LOG_WARN, "Interface %s is down or not running", pcap_port->name);
+        pthread_rwlock_unlock(pcap_drv->ports_rwlock);
+        return false;
+    }
+    pthread_rwlock_unlock(pcap_drv->ports_rwlock);
 
     int ret = pcap_inject(pcap_port->pcap, pkt_buf->data, pkt_buf->data_len);
     if (ret == -1) {
@@ -303,4 +355,153 @@ pcap_drv_port_mod(struct pcap_drv *drv, size_t drv_port_no, uint32_t config) {
         pthread_mutex_unlock(port->stats_mutex);
     } else {
     }
+}
+
+
+static void
+netlink_cb(struct ev_loop *l, struct ev_io *w, int revents) {
+    struct pcap_drv *pcap_drv = (struct pcap_drv*)w->data;
+    struct sockaddr_nl kernel;
+    char reply[IFLIST_REPLY_BUFFER]; /* a large buffer */
+    int len;
+    struct nlmsghdr *msg_ptr;    /* pointer to current part */
+    struct msghdr rtnl_reply;    /* generic msghdr structure */
+    struct iovec io_reply;
+
+    memset(&io_reply, 0, sizeof(io_reply));
+    memset(&rtnl_reply, 0, sizeof(rtnl_reply));
+    memset(&kernel, 0, sizeof(kernel));
+
+    kernel.nl_family = AF_NETLINK;
+
+    io_reply.iov_base = reply;
+    io_reply.iov_len = IFLIST_REPLY_BUFFER;
+    rtnl_reply.msg_iov = &io_reply;
+    rtnl_reply.msg_iovlen = 1;
+    rtnl_reply.msg_name = &kernel;
+    rtnl_reply.msg_namelen = sizeof(kernel);
+
+    len = recvmsg(w->fd, &rtnl_reply, 0); /* read lots of data */
+    if (len) {
+        for (msg_ptr = (struct nlmsghdr *) reply;
+                NLMSG_OK(msg_ptr, len);
+                msg_ptr = NLMSG_NEXT(msg_ptr, len)) {
+            switch(msg_ptr->nlmsg_type) {
+                case NLMSG_DONE:
+                    logger_log(pcap_drv->logger, LOG_DEBUG, "Netlink msg done.");
+                    break;
+                case RTM_NEWLINK:
+                    logger_log(pcap_drv->logger, LOG_DEBUG, "RTM_NEWLINK msg arrived.");
+                    linux_add_port(msg_ptr, pcap_drv);
+                    break;
+                default:  
+                    logger_log(pcap_drv->logger, LOG_DEBUG, "Netlink msg type %d, length %d\n",
+                            msg_ptr->nlmsg_type, msg_ptr->nlmsg_len);
+                    break;
+            }
+        }
+    }
+}
+
+void
+linux_add_port(struct nlmsghdr *h, struct pcap_drv *pcap_drv) {
+    struct linux_port *tmp, *new_port = malloc(sizeof(struct linux_port));
+    memset(new_port, 0, sizeof(struct linux_port));
+    struct ifinfomsg *iface;
+    struct rtattr *attribute;
+    int len;
+
+
+    iface = NLMSG_DATA(h);
+    len = h->nlmsg_len - NLMSG_LENGTH(sizeof(*iface));
+    new_port->linux_if_index = iface->ifi_index;
+    memcpy(&new_port->flags, &iface->ifi_flags, sizeof(struct linux_port_flags));
+
+    for (attribute = IFLA_RTA(iface);
+            RTA_OK(attribute, len);
+            attribute = RTA_NEXT(attribute, len)) {
+        switch(attribute->rta_type) {
+            case IFLA_IFNAME: 
+                strcpy(new_port->name, RTA_DATA(attribute));
+                break;
+            default:
+                break;
+        }
+    }
+
+    logger_log(pcap_drv->logger, LOG_DEBUG, "Netlink msg received for interface %d: %s", iface->ifi_index, new_port->name);
+
+    pthread_rwlock_wrlock(pcap_drv->ports_rwlock);
+    HASH_FIND_STR(pcap_drv->linux_ports_map, new_port->name, tmp);
+    if(tmp == NULL) {
+        logger_log(pcap_drv->logger, LOG_DEBUG, "Interface %s is new", new_port->name);
+        HASH_ADD_KEYPTR(hh, pcap_drv->linux_ports_map, new_port->name, strlen(new_port->name), new_port);
+    } else {
+        struct pcap_port *port;
+        HASH_FIND_STR(pcap_drv->ports_map, new_port->name, port);
+        if (port == NULL) {
+            logger_log(pcap_drv->logger, LOG_DEBUG, "There is no pcap_port for interface %s", new_port->name);
+        } else if ((new_port->flags.UP != tmp->flags.UP) || (new_port->flags.RUNNING != tmp->flags.RUNNING)) {
+            logger_log(pcap_drv->logger, LOG_DEBUG, "Status changed for interface %s:", new_port->name);
+            if (new_port->flags.UP != tmp->flags.UP) {
+                logger_log(pcap_drv->logger, LOG_DEBUG, new_port->flags.UP ? "Down -> Up" : "Up -> Down");
+            }
+            if (new_port->flags.RUNNING != tmp->flags.RUNNING) {
+                logger_log(pcap_drv->logger, LOG_DEBUG, new_port->flags.RUNNING ? "Not running -> Running" : "Running -> Not Running");
+            }
+
+            if (new_port->flags.UP && new_port->flags.RUNNING) {
+                if (port->pcap == NULL) {
+                    pcap_open(port);
+                } else {
+                    pcap_reopen(port);
+                }
+
+                ev_io_start(pcap_drv->loop, port->watcher);
+                mbox_notify(pcap_drv->notifier);
+            }
+        }
+        memcpy(&tmp->flags, &new_port->flags, sizeof(struct linux_port_flags));
+    }
+    pthread_rwlock_unlock(pcap_drv->ports_rwlock);
+}
+
+void
+linux_get_ports(struct pcap_drv *pcap_drv) {
+    int sequence_number = 0;
+    struct nl_req_s {
+        struct nlmsghdr hdr;
+        struct rtgenmsg gen;
+    } req;
+    struct sockaddr_nl kernel;
+    struct msghdr rtnl_msg;
+    struct iovec io;
+
+    memset(&rtnl_msg, 0, sizeof(rtnl_msg));
+    memset(&kernel, 0, sizeof(kernel));
+    memset(&req, 0, sizeof(req));
+
+    kernel.nl_family = AF_NETLINK;
+
+    req.hdr.nlmsg_len    = NLMSG_LENGTH(sizeof(struct rtgenmsg));
+    req.hdr.nlmsg_type   = RTM_GETLINK;
+    req.hdr.nlmsg_flags  = NLM_F_REQUEST | NLM_F_DUMP;
+    req.hdr.nlmsg_seq    = ++sequence_number;
+    req.hdr.nlmsg_pid    = 0;
+    req.gen.rtgen_family = AF_UNSPEC;
+
+    io.iov_base = &req;
+    io.iov_len = req.hdr.nlmsg_len;
+    rtnl_msg.msg_iov = &io;
+    rtnl_msg.msg_iovlen = 1;
+    rtnl_msg.msg_name = &kernel;
+    rtnl_msg.msg_namelen = sizeof(kernel);
+
+    if(sendmsg(pcap_drv->netlinkfd, (struct msghdr *) &rtnl_msg, 0) < 0) {
+        logger_log(pcap_drv->logger, LOG_ERR, "Unable to send netlink msg");
+    }
+
+    netlink_cb(pcap_drv->loop, pcap_drv->netlinkwatcher, 0);
+
+    return;
 }

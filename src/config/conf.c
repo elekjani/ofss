@@ -59,6 +59,6 @@ conf_args(void *args_) {
     LL_FOREACH(args->ctrls, ctrl) {
         dp_mgr_dp_add_ctrl(dp_uid, ctrl->transport, ctrl->host, ctrl->port);
     }
-
+	
     logger_log(logger, LOG_INFO, "Created new DP (%u) from args.", dp_uid);
 }

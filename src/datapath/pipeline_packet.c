@@ -26,6 +26,7 @@
 #include "pipeline_packet.h"
 #include "protocol_stack.h"
 #include "action_set.h"
+#include "logger/logger.h"
 
 
 #define INIT_STACK_SIZE 8

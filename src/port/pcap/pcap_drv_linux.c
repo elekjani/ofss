@@ -155,4 +155,16 @@ pcap_port_fill(struct pcap_port *pcap_port) {
 
     //TODO: check ifr.ifr_hwaddr.sa_family ?
     memcpy(pcap_port->of_port->hw_addr, ifr.ifr_hwaddr.sa_data, OFP_ETH_ALEN);
+
+    /* flgas */
+    memset(&ifr, 0, sizeof ifr);
+    strncpy(ifr.ifr_name, pcap_port->name, sizeof ifr.ifr_name);
+    ret = ioctl(pcap_port->fd, SIOCGIFFLAGS, &ifr);
+    if (ret != 0) {
+        char errbuf[BUFSIZ];
+        strerror_r(errno, errbuf, BUFSIZ);
+        logger_log(pcap_port->logger, LOG_WARN, "flags failed: %s.", errbuf);
+        return;
+    }
+
 }

@@ -80,7 +80,7 @@ send_echo_request(struct conn *conn) {
     struct ofp_header echo = {
         .version = OFP_VERSION,
         .type = OFPT_ECHO_REQUEST,
-        .length = sizeof(struct ofp_header),
+        .length = htons(sizeof(struct ofp_header)),
         .xid = 0
     };
 

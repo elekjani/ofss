@@ -230,6 +230,35 @@ ofl_utils_count_ofp_queue_props(void *data, size_t data_len, size_t *count, char
     return 0;
 }
 
+ofl_err
+ofl_utils_count_ofp_processor_stats(void *data, size_t data_len, size_t *count, char *errbuf) {
+	struct ofp_processor_stat_reply *stat = (struct ofp_processor_stat_reply *)data;
+	data_len -= sizeof(struct ofp_processor_stats_reply);
+
+	(*count) = 0;
+
+	while (data_len >= sizeof(struct ofp_processor_stat)) {
+		data_len -= sizeof(struct ofp_processor_stat);
+		(*count)++;
+	}
+
+	return 0;
+}
+
+ofl_err
+ofl_utils_count_ofp_processor_inst_stats(void *data, size_t data_len, size_t *count, char *errbuf) {
+	struct ofp_processor_inst_stat_reply *stat = (struct ofp_processor_inst_stat_reply *)data;
+	data_len -= sizeof(struct ofp_processor_inst_stats_reply);
+
+	(*count) = 0;
+
+	while (data_len >= sizeof(struct ofp_processor_inst_stat)) {
+		data_len -= sizeof(struct ofp_processor_inst_stat);
+		(*count)++;
+	}
+
+	return 0;
+}
 
 void
 ofl_structs_free_packet_queue(struct ofl_packet_queue *queue) {
@@ -242,6 +271,7 @@ ofl_structs_free_instruction(struct ofl_instruction_header *inst, struct ofl_exp
     switch (inst->type) {
         case OFPIT_GOTO_TABLE:
         case OFPIT_WRITE_METADATA:
+        case OFPIT_GOTO_PROCESSOR:
             break;
         case OFPIT_WRITE_ACTIONS:
         case OFPIT_APPLY_ACTIONS: {
@@ -361,6 +391,10 @@ ofl_structs_instruction_clone(struct ofl_instruction_header *inst, struct ofl_ex
             return memcpy(malloc(sizeof(struct ofl_instruction_actions)), inst,
                                         sizeof(struct ofl_instruction_actions));
         }
+        case OFPIT_GOTO_PROCESSOR: {
+           return memcpy(malloc(sizeof(struct ofl_instruction_goto_processor)),inst,
+                                       sizeof(struct ofl_instruction_goto_processor));
+	    }
         case OFPIT_EXPERIMENTER: {
             if (exp == NULL || exp->inst == NULL || exp->inst->clone == NULL) {
                 if (errbuf != NULL) {
