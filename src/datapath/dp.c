@@ -124,6 +124,13 @@ dp_new(size_t uid, of_dpid_t dpid) {
 
     dp_loop->ctrl = dp->ctrl;
 
+	dp->packetproc = packetproc_new(dp);
+	if (dp->packetproc == NULL) {
+        logger_log(dp->logger, LOG_WARN, "Error creating packet processor for datapath %"PRIx64".", dpid);
+        //TODO: free structures
+        return NULL;
+    }
+
     dp->thread = malloc(sizeof(pthread_t));
     dp->loop = ev_loop_new(0/*flags*/);
     dp_loop->loop = dp->loop;
