@@ -39,6 +39,13 @@ struct ofl_msg_header {
     enum ofp_type   type;   /* One of the OFPT_ constants. */
 };
 
+/* Header structure for all packet processor messages. */
+struct ofl_msg_processor {
+    struct ofl_msg_header header;
+    uint32_t proc_id;
+    uint32_t type;
+};
+
 
 /*********************
  * Immutable messages

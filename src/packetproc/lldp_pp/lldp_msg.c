@@ -167,8 +167,6 @@ struct linkInfo* makeLinkInfo(struct LldpMIB *lldpMIB, struct lldpRemEntry *remE
 
 void
 notifyCtrl(struct LldpMIB *lldpMIB) {
-    logger_log(lldpMIB->logger, LOG_DEBUG, "notifyCtrl");
-
     struct chassisInfo *chassis = makeChassisInfo(lldpMIB);
     if(lldpMIB->lldpLocalData->lldpStatus == LLDP_ADDED) {
         logger_log(lldpMIB->logger, LOG_DEBUG, "Send chassis information.");

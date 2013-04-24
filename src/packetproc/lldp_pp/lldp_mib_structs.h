@@ -6,6 +6,10 @@
  *
  *
  * Author: Elek Janos <janos.elek@ericsson.com>
+ *
+ * This header contains a partial realization of the LLDP MIB.
+ * More information can be found in the IEEE 802.1AB standard.
+ *
  */
 
 #ifndef LLDP_MIB_STRUCTS_H
@@ -15,6 +19,8 @@
 #include "lldp_int.h"
 #include "ev.h"
 
+
+/* Describe the status of the MIB or a specific entity in the MIB. */
 enum LldpStatus {
     LLDP_NONE    = 0,
     LLDP_ADDED   = 1,

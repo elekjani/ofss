@@ -18,14 +18,14 @@
 #define MANDATORY_HEADER_SIZE 12
 
 enum TLV_types {
-    CHASSIS_ID = 1,
-    PORT_ID = 2,
-    TTL = 3,
-    PORT_DESC = 4,
-    SYSTEM_NAME = 5,
-    SYSTEM_DESC = 6,
-    SYSTEM_CAP = 7,
-    END_TLV = 0,
+    CHASSIS_ID = 1,  //mandatory
+    PORT_ID = 2,     //mandatory
+    TTL = 3,         //mandatory
+    PORT_DESC = 4,   //optional
+    SYSTEM_NAME = 5, //optional
+    SYSTEM_DESC = 6, //optional
+    SYSTEM_CAP = 7,  //optional
+    END_TLV = 0,     //optional
 };
 
 struct LLDPU_header {
@@ -64,11 +64,16 @@ struct LLDPU_capabilities {
     uint16_t enabled;
 };
 
+/* Internal description of an LLDP message. The second block of members can be omitted.
+ * In that case the LLDPU_string data_length member is set to zero or, the LLDPU_capabilites
+ * use_it member set to false */
 struct LLDPU {
+    /*****mandatory members*****/
     struct LLDPU_chassisId chassisId;
     struct LLDPU_portId    portId;
     struct LLDPU_TTL       TTL;
 
+    /*****optional  members*****/
     struct LLDPU_strings port_desc;
     struct LLDPU_strings system_name;
     struct LLDPU_strings system_desc;

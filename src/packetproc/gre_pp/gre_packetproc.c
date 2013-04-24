@@ -33,6 +33,11 @@
 static int
 gre_mod(struct packetproc *packetproc, struct ofl_msg_processor_mod *req,struct pp *pp,struct pp_shared_data *pp_shared_data);
 
+static int
+gre_ctrl(struct packetproc *packetproc, struct ofl_msg_processor_mod *req,struct pp *pp,struct pp_shared_data *pp_shared_data) {
+    return 0;
+}
+
 static int 
 gre_unpack(uint8_t *src, uint8_t **msg, enum ofp_type type, char *errbuf);
 
@@ -55,6 +60,7 @@ gre_packetproc_init(struct packetproc *packetproc) {
     struct PP_types_list *PP_type = malloc(sizeof(struct PP_types_list));
     PP_type->PP_type              = GRE;
     PP_type->mod_cb               = gre_mod;
+    PP_type->ctrl_cb              = gre_ctrl;
     PP_type->unpack_cb            = gre_unpack;
     PP_type->pack_cb              = gre_pack;
 	PP_type->free_cb			  = gre_free;

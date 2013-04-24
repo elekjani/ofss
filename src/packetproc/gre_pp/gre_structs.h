@@ -14,6 +14,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
+/* Configuration structure. This is sent by the controller to create a new pp */
 struct gre_pp_mod {
     uint32_t local_ip;
     uint32_t local_tunnel_ip;

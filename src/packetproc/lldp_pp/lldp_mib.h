@@ -17,15 +17,21 @@
 
 #include "lib/openflow.h"
 
+/* Create and initialize the main MIB structure */
 struct LldpMIB*
 makeMIB(struct lldp_pp_mod *lldp_pp_mod, struct lldp_pp *lldp_pp);
 
+/* Called when a OFPPRC_MODIFY message has arrived.
+ * Not implemented yet. */
 void
 modifyMIB(struct LldpMIB *lldpMIB, struct lldp_pp_mod *lldp_pp_mod);
 
+/* If a new LLDP messages arrive, this function refresh or add a new entry
+ * to the lldpRemoteSystemData */
 void
 refreshMIB(struct LldpMIB *lldpMIB, struct LLDPU* LLDPU, of_port_no_t in_port );
 
+/* Free the allocated structure. Used when the packet processor is being deleted. */
 void
 deleteMIB(struct LldpMIB *lldpMIB);
 

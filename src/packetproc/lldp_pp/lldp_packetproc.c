@@ -37,6 +37,11 @@ static int
 lldp_mod(struct packetproc *packetproc, struct ofl_msg_processor_mod *req, struct pp *pp, struct pp_shared_data *pp_shared_data);
 
 static int
+lldp_ctrl(struct packetproc *packetproc, struct ofl_msg_processor_mod *req, struct pp *pp, struct pp_shared_data *pp_shared_data) {
+    return 0;
+}
+
+static int
 lldp_unpack(uint8_t *src, uint8_t **msg, enum ofp_type type, char *errbuf);
 
 static int
@@ -82,6 +87,7 @@ lldp_packetproc_init(struct packetproc *packetproc) {
   struct PP_types_list *PP_type = malloc(sizeof(struct PP_types_list));
   PP_type->PP_type              = LLDP;
   PP_type->mod_cb               = lldp_mod;
+  PP_type->ctrl_cb              = lldp_ctrl;
   PP_type->unpack_cb            = lldp_unpack;
   PP_type->pack_cb              = lldp_pack;
   PP_type->free_cb              = lldp_free;
@@ -332,7 +338,6 @@ lldp_process_msg(void *pp_, struct list_node *cmd_) {
   struct lldp_pp *lldp_pp = (struct lldp_pp *)pp->private;
 
   logger_log(pp->logger, LOG_DEBUG, "Packet received. input: %u", pp_msg->input_id);
-  //logger_log(pp->logger, LOG_DEBUG, "Packet length: %d", pkt_buf->data_len);
 
   char errbuf[BUFSIZ];
   struct LLDPU *LLDPU = create_LLDPU_from_TLV(pkt_buf->data, pkt_buf->data_len, errbuf);

@@ -17,15 +17,15 @@
 #define NTOH_HEADER(header) header->type = (ntohs( *((uint16_t*)header)) >> 9) & 0x01FF;  \
                             header->length = ntohs( *((uint16_t*)header)) & 0x007F
 
-bool
-compare_LLDPU(struct LLDPU *newLLDPU, struct LLDPU *oldLLDPU);
-
+/* Convert incoming LLDP messages from TLV to internal LLDPU type */
 struct LLDPU*
 create_LLDPU_from_TLV(uint8_t *msg, size_t data_len, char* errbuf);
 
+/* Create an LLDP message from LLDPU type, that can be send out on a LLDP port */
 void
 create_TLV_from_LLDPU(struct LldpMIB *lldpMIB, struct LLDPU *LLDPU, size_t port_num, uint8_t **msg, size_t *length);
 
+/* Free the allocated memory spaces */
 void
 free_LLDPU(struct LLDPU*);
 

@@ -53,6 +53,8 @@ packetproc_new(struct dp *dp) {
     packetproc->mutex = malloc(sizeof(pthread_mutex_t));
     pthread_mutex_init(packetproc->mutex, NULL);
 
+    /* Initialize basic packet processor structures and
+     * call #ppName#_packetproc_init for every pp type */
     init_packetprocessors(packetproc);
 
     ev_set_userdata(packetproc->loop, (void *)packetproc_loop);
@@ -168,8 +170,10 @@ packetproc_stats_reply_all(struct packetproc *packetproc) {
     buff_len = count * sizeof(struct ofl_processor_stat) + sizeof(struct ofl_msg_stats_reply_processor);
 
     struct ofl_msg_stats_reply_processor *rep = malloc(buff_len);
+    rep->header.type = OFPST_PROCESSOR;
     rep->total_num = packetproc->current_pp_num_global;
     rep->total_max = packetproc->max_pp_num_global;
+    rep->stats_num = count;
 
     count = 0;
     DL_FOREACH(PP_types_list,pp_type) { 
@@ -208,6 +212,8 @@ packetproc_inst_stats_reply_all(struct packetproc *packetproc, uint32_t proc_id)
     size_t buff_len = 0;
     buff_len = pp->inputs_num * sizeof(struct ofl_processor_inst_stat) + sizeof(struct ofl_msg_stats_reply_processor_inst);
     struct ofl_msg_stats_reply_processor_inst *rep = malloc(buff_len);
+    rep->header.type = OFPST_PROCESSOR_INST;
+    rep->stats_num  = pp->inputs_num;
 
     /* very inefficient... */
     size_t max = 0, count = 0, i;
@@ -284,92 +290,104 @@ packetproc_inst_stats_reply(struct packetproc *packetproc, uint32_t proc_id, uin
 }
 
 ssize_t
-packetproc_mod_spec_proc_spec_type(struct packetproc *packetproc,struct ofl_msg_processor_mod *req) {
+packetproc_spec_proc_spec_type(struct packetproc *packetproc,struct ofl_msg_processor *msg) {
     ssize_t error = 0;
-    struct PP_types_list *pp_type = pp_types_get(req->type);
+    struct PP_types_list *pp_type = pp_types_get(msg->type);
     if(pp_type == NULL) {
-        logger_log(packetproc->logger, LOG_ERR, "There is no such pp_type: %d", req->type);
+        logger_log(packetproc->logger, LOG_ERR, "There is no such pp_type: %d", msg->type);
         return -1;
     }
 
     pthread_mutex_lock(packetproc->mutex);
 
     struct pp *pp = NULL;
-    HASH_FIND(hh, packetproc->pp_map, &(req->proc_id), sizeof(uint32_t), pp);
+    HASH_FIND(hh, packetproc->pp_map, &(msg->proc_id), sizeof(uint32_t), pp);
 
     struct pp_shared_data *pp_shared_data;
-    HASH_FIND(hh, packetproc->pp_shared_data, &(req->type), sizeof(uint32_t), pp_shared_data);
+    HASH_FIND(hh, packetproc->pp_shared_data, &(msg->type), sizeof(uint32_t), pp_shared_data);
     if(pp_shared_data == NULL) {
         //TODO: send error msg to controller
-        logger_log(pp_type->logger, LOG_WARN, "The shared data is not initialized for pp type %s", PP_types_name[req->type] );
+        logger_log(pp_type->logger, LOG_WARN, "The shared data is not initialized for pp type %s", PP_types_name[msg->type] );
         pthread_mutex_unlock(packetproc->mutex);
         return -1;
     }
 
-    switch (req->command) {
-        case OFPPRC_ADD: {
-            if( pp != NULL ) { 
-                //TODO:send error msg to controller
-                logger_log(pp_type->logger, LOG_WARN, "There is already a pp with proc_id: %d", req->proc_id);
-                error = -1;
-                break;
-            }
-
-            pp                       = malloc(sizeof(struct pp));
-            pp->proc_id              = req->proc_id;
-            pp->type_id              = req->type;
-            pp->logger               = logger_mgr_get(LOGGER_NAME_PP_PROC, PP_types_name[req->type], req->proc_id);
-            pp->packetproc           = packetproc;
-            pp->flow_refs            = NULL;
-            pp->processor_refs       = NULL;
-            
-            pp_type->mod_cb(packetproc, req, pp, pp_shared_data);
-
-            HASH_ADD(hh, packetproc->pp_map, proc_id, sizeof(uint32_t), pp);
-
-            pp_type->current_pp_num++;
-            packetproc->current_pp_num_global++;
-
-            mbox_notify(pp->msg_mbox);
-
-            logger_log(pp_type->logger, LOG_DEBUG, "Packet processor instance added with proc id %d", req->proc_id);
-
-            break;
+    if(msg->header.type == OFPT_PROCESSOR_CTRL) {
+        struct ofl_msg_processor_ctrl *req = (struct ofl_msg_processor_ctrl*)msg;
+        if(pp == NULL) {
+            logger_log(pp_type->logger, LOG_WARN, "There is no pp with proc_id: %d", req->proc_id);
+            error = -1;
+        }else {
+            pp_type->ctrl_cb(packetproc, req, pp, pp_shared_data);
         }
-        case OFPPRC_MODIFY: {
-            if( pp == NULL ) { 
-				//TODO:send error msg to controller
-                logger_log(pp_type->logger, LOG_WARN, "There is no pp with proc_id: %d", req->proc_id);
-                error = -1;
+
+    }else if(msg->header.type == OFPT_PROCESSOR_MOD){
+        struct ofl_msg_processor_mod *req = (struct ofl_msg_processor_mod*)msg;
+        switch (req->command) {
+            case OFPPRC_ADD: {
+                if( pp != NULL ) { 
+                    //TODO:send error msg to controller
+                    logger_log(pp_type->logger, LOG_WARN, "There is already a pp with proc_id: %d", req->proc_id);
+                    error = -1;
+                    break;
+                }
+
+                pp                       = malloc(sizeof(struct pp));
+                pp->proc_id              = req->proc_id;
+                pp->type_id              = req->type;
+                pp->logger               = logger_mgr_get(LOGGER_NAME_PP_PROC, PP_types_name[req->type], req->proc_id);
+                pp->packetproc           = packetproc;
+                pp->flow_refs            = NULL;
+                pp->processor_refs       = NULL;
+                
+                pp_type->mod_cb(packetproc, req, pp, pp_shared_data);
+
+                HASH_ADD(hh, packetproc->pp_map, proc_id, sizeof(uint32_t), pp);
+
+                pp_type->current_pp_num++;
+                packetproc->current_pp_num_global++;
+
+                mbox_notify(pp->msg_mbox);
+
+                logger_log(pp_type->logger, LOG_DEBUG, "Packet processor instance added with proc id %d", req->proc_id);
+
                 break;
             }
+            case OFPPRC_MODIFY: {
+                if( pp == NULL ) { 
+                    //TODO:send error msg to controller
+                    logger_log(pp_type->logger, LOG_WARN, "There is no pp with proc_id: %d", req->proc_id);
+                    error = -1;
+                    break;
+                }
 
-            pp_type->mod_cb(packetproc, req, pp, pp_shared_data);
+                pp_type->mod_cb(packetproc, req, pp, pp_shared_data);
 
-            break;
-        }
-        case OFPPRC_DELETE: {
-            if( pp == NULL ) { 
-				//TODO:send error msg to controller
-                logger_log(pp_type->logger, LOG_WARN, "There is no pp with proc_id: %d", req->proc_id);
-                error = -1;
                 break;
             }
+            case OFPPRC_DELETE: {
+                if( pp == NULL ) { 
+                    //TODO:send error msg to controller
+                    logger_log(pp_type->logger, LOG_WARN, "There is no pp with proc_id: %d", req->proc_id);
+                    error = -1;
+                    break;
+                }
 
-            if(pp_type->mod_cb(packetproc, req, pp, pp_shared_data) == 0) {
-                pp_type->current_pp_num--;
-                packetproc->current_pp_num_global--;
+                if(pp_type->mod_cb(packetproc, req, pp, pp_shared_data) == 0) {
+                    pp_type->current_pp_num--;
+                    packetproc->current_pp_num_global--;
 
-                HASH_DELETE(hh, packetproc->pp_map, pp);
-                mbox_free(pp->msg_mbox);
-                free(pp);
-            }else {
-                //TODO: error?
-                error = -1;
+                    HASH_DELETE(hh, packetproc->pp_map, pp);
+                    mbox_free(pp->msg_mbox);
+                    free(pp);
+                }else {
+                    //TODO: error?
+                    error = -1;
+                    break;
+                }
+
                 break;
             }
-
-            break;
         }
     }
     pthread_mutex_unlock(packetproc->mutex);
@@ -379,34 +397,24 @@ packetproc_mod_spec_proc_spec_type(struct packetproc *packetproc,struct ofl_msg_
 
 
 ssize_t
-packetproc_mod_all_proc_all_type(struct packetproc *packetproc,struct ofl_msg_processor_mod *req) {
+packetproc_all_proc_all_type(struct packetproc *packetproc,struct ofl_msg_processor *req) {
     struct pp *pp;
-    struct ofl_msg_processor_mod r;
-    memcpy(&r, req, sizeof(struct ofl_msg_processor_mod));
-    if(req->data_length >0) {
-        r.data = malloc(req->data_length);
-        memcpy(r.data, req->data, req->data_length);
-    }
     for(pp=packetproc->pp_map; pp!=NULL; pp = pp->hh.next) {
-        r.type = pp->type_id;
-        r.proc_id = pp->proc_id;
-        packetproc_mod_spec_proc_spec_type(packetproc, &r);
+        req->type = pp->type_id;
+        req->proc_id = pp->proc_id;
+        packetproc_spec_proc_spec_type(packetproc, req);
     }
 
     return 0;
 }
 
 ssize_t
-packetproc_mod_all_proc_spec_type(struct packetproc *packetproc,struct ofl_msg_processor_mod *req) {
+packetproc_all_proc_spec_type(struct packetproc *packetproc,struct ofl_msg_processor *req) {
     struct pp *pp;
-    struct ofl_msg_processor_mod r;
-    memcpy(&r, req, sizeof(struct ofl_msg_processor_mod));
-    r.data = malloc(req->data_length);
-    memcpy(r.data, req->data, req->data_length);
     for(pp=packetproc->pp_map; pp!=NULL; pp = pp->hh.next) {
         if(pp->type_id == req->type) {
-            r.proc_id = pp->proc_id;
-            packetproc_mod_spec_proc_spec_type(packetproc, &r);
+            req->proc_id = pp->proc_id;
+            packetproc_spec_proc_spec_type(packetproc, req);
         }
     }
 
@@ -414,28 +422,33 @@ packetproc_mod_all_proc_spec_type(struct packetproc *packetproc,struct ofl_msg_p
 }
 
 ssize_t
-packetproc_proc_mod(struct packetproc *packetproc, struct ofl_msg_processor_mod *req) {
+packetproc_proc_msg(struct packetproc *packetproc, struct ofl_msg_processor *msg) {
+    uint32_t proc_id = msg->proc_id;
+    uint32_t type    = msg->type;
 
-    if(req->proc_id == 0xffffffff || req->type == 0xffffffff) {
+    if(msg->proc_id == 0xffffffff || msg->type == 0xffffffff) {
         //TODO: spacial behavior for NONE type
         return 0;
     }
 
 
     ssize_t error = 0;
-    if(req->proc_id == 0xfffffffe) {
-        if(req->type == 0xfffffffe) { //ALL proc_id and ALL type
-            error = packetproc_mod_all_proc_all_type(packetproc, req);
+    if(msg->proc_id == 0xfffffffe) {
+        if(msg->type == 0xfffffffe) { //ALL proc_id and ALL type
+            error = packetproc_all_proc_all_type(packetproc, msg);
         }else { //ALL proc_id and specific type
-            error = packetproc_mod_all_proc_spec_type(packetproc, req);
+            error = packetproc_all_proc_spec_type(packetproc, msg);
         }
     }else{
-        if(req->type == 0xfffffffe) { //specific proc_id and ALL type (undefined)
+        if(msg->type == 0xfffffffe) { //specific proc_id and ALL type (undefined)
             //TODO: error?
         }else { //specific proc_id and specific type
-            error = packetproc_mod_spec_proc_spec_type(packetproc, req);
+            error = packetproc_spec_proc_spec_type(packetproc, msg);
         }
     }
+
+    msg->proc_id = proc_id;
+    msg->type    = type;
 
     return error;
 

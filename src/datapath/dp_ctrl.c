@@ -543,12 +543,12 @@ flow_mod(struct dp_loop *dp_loop, struct dp_msg *msg) {
 }
 
 static ofl_err
-proc_mod(struct dp_loop *dp_loop, struct dp_msg *msg) {
+proc_msg(struct dp_loop *dp_loop, struct dp_msg *msg) {
     struct dp *dp = dp_loop->dp;
-    struct ofl_msg_processor_mod *req_p = (struct ofl_msg_processor_mod*)(msg->msg);
+    struct ofl_msg_processor *req = (struct ofl_msg_processor*)msg->msg;
 
-    if(packetproc_proc_mod(dp->packetproc, req_p) == -1) {
-        logger_log(dp_loop->logger, LOG_ERR, "Unsuccesful control message sending to packetproc.");
+    if(packetproc_proc_msg(dp->packetproc, req) == -1) {
+        logger_log(dp_loop->logger, LOG_ERR, "Unable to send message to packet processor.");
     }
 
     ofl_msg_free(msg->msg, OFL_NO_EXP, NULL);
@@ -694,8 +694,9 @@ dp_ctrl_recv_msg(struct dp_loop *dp_loop, struct dp_msg *msg) {
             error = queue_req(dp_loop, msg);
             break;
         }
-        case OFPT_PROCESSOR_MOD: {
-            error = proc_mod(dp_loop, msg);
+        case OFPT_PROCESSOR_MOD:
+        case OFPT_PROCESSOR_CTRL: {
+            error = proc_msg(dp_loop, msg);
             break;
         }
         default: {

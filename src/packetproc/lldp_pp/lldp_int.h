@@ -23,19 +23,19 @@ struct lldp_loop {
     struct ev_loop   *loop;
 };
 
+/* Shared object between the LLDP packet processors */
 struct lldp_main {
     struct packetproc      *packetproc;
     struct logger          *logger;
 
     struct lldp_loop       *lldp_loop;
 
-    struct pp              *port_to_pp[MAX_PORTS];  /* map of entries based on their unique ID. */
-
     char*                   system_name;
     char*                   system_description;
     char*                   system_capabilities;
 };
 
+/* The private of object of a specific LLDP packet processor */
 struct lldp_pp {
     struct lldp_main  *lldp_main;
     struct pp         *pp;
@@ -46,6 +46,8 @@ struct lldp_pp {
 	struct LldpMIB    *lldpMIB;
 };
 
+/* Used by the controller to communicate the main configuration parameters
+ * for the packet processor */
 struct lldp_pp_mod {
     uint16_t lldpMessageTxInterval;
     uint16_t lldpMessageTxHoldMultiplier;

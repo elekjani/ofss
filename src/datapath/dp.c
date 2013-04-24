@@ -108,13 +108,6 @@ dp_new(size_t uid, of_dpid_t dpid) {
     dp->dp_loop = dp_loop;
     dp_loop->dp = dp;
 
-	dp->packetproc = packetproc_new(dp);
-	if (dp->packetproc == NULL) {
-        logger_log(dp->logger, LOG_WARN, "Error creating packet processor for datapath %"PRIx64".", dpid);
-        //TODO: free structures
-        return NULL;
-    }
-
     dp->ctrl = ctrl_new(dp);
     if (dp->ctrl == NULL) {
         logger_log(dp->logger, LOG_WARN, "Error creating control for datapath %"PRIx64".", dpid);

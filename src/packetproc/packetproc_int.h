@@ -16,6 +16,8 @@
 
 #define MAX_PP_NUM_GLOBAL 255;
 
+/* Extended pl_pkt structure. Used by pp_send_msg to send a pipeline
+ * packet in a specific pp's msg_mbox with the mbox mechanism*/
 struct pp_msg {
     struct list_node list;
 
@@ -24,12 +26,16 @@ struct pp_msg {
     uint32_t input_id;
 };
 
+/* Every packet processor type has a shared data.
+ * This is essentainly a hash map with the type id as an unique id */
 struct pp_shared_data {
     uint32_t type;
     void *private;
     UT_hash_handle hh;
 };
 
+/* A reference to a packet processor. The ref member can be a flow_entry's
+ * uid, or a packet processor's proc_id */
 struct pp_refs {
     uint32_t ref;
     uint32_t input_id;

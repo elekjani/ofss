@@ -30,6 +30,11 @@
 static int
 default_mod(struct packetproc *packetproc, struct ofl_msg_processor_mod *req,struct pp *pp,struct pp_shared_data *pp_shared_data);
 
+static int
+default_ctrl(struct packetproc *packetproc, struct ofl_msg_processor_mod *req,struct pp *pp,struct pp_shared_data *pp_shared_data) {
+    return 0;
+}
+
 static int 
 default_unpack(uint8_t *src, uint8_t **msg, enum ofp_type type, char *errbuf);
 
@@ -50,6 +55,7 @@ default_packetproc_init(struct packetproc *packetproc) {
     struct PP_types_list *PP_type = malloc(sizeof(struct PP_types_list));
     PP_type->PP_type              = DEFAULT;
     PP_type->mod_cb               = default_mod;
+    PP_type->ctrl_cb              = default_ctrl;
     PP_type->unpack_cb            = default_unpack;
     PP_type->pack_cb              = default_pack;
 	PP_type->free_cb			  = default_free;

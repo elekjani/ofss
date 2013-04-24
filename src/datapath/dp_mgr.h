@@ -36,7 +36,4 @@ dp_mgr_dp_add_port(size_t dp_uid, of_port_no_t port_no, const char *driver, cons
 void
 dp_mgr_dp_add_ctrl(size_t dp_uid, const char *trans, const char *host, const char *port);
 
-void
-dp_mgr_dp_add_pp(size_t dp_uid);
-
 #endif /* DP_MGR_H */

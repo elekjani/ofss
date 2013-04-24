@@ -34,10 +34,13 @@
 
 /***************************************/
 
+/******callback types********/
 typedef int (*unpack_callback)(uint8_t *src, uint8_t **msg, enum ofp_type type, char *errbuf);
 typedef int (*pack_callback)(uint8_t *msg, uint8_t *buf, enum ofp_type type);
-typedef int (*mod_callback)(struct packetproc *packetproc, struct ofl_msg_processor_mod *req, struct pp *pp, struct pp_shared_data *pp_shared_data );
 typedef int (*free_callback)(uint8_t *msg, enum ofp_type type);
+typedef int (*mod_callback)(struct packetproc *packetproc, struct ofl_msg_processor_mod *req, struct pp *pp, struct pp_shared_data *pp_shared_data );
+typedef int (*ctrl_callback)(struct packetproc *packetproc, struct ofl_msg_processor_ctrl *req, struct pp *pp, struct pp_shared_data *pp_shared_data );
+/****************************/
 
 #define ADD_PP(TYPE, TYPE_NAME, CB) TYPE,
 enum PP_Types {
@@ -53,6 +56,7 @@ struct PP_types_list {
     unpack_callback         unpack_cb;
     pack_callback           pack_cb;
     mod_callback            mod_cb;
+    ctrl_callback           ctrl_cb;
 	free_callback			free_cb;
 
     uint32_t                current_pp_num;
