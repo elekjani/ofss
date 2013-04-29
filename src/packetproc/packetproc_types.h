@@ -35,6 +35,10 @@
 /***************************************/
 
 /******callback types********/
+/* The mod and ctrl callback is needed to message handling. This two callback get the OFPT_PROCESSOR_MOD and OFPT_PROCESSOR_CTRL messages.
+ * The unpack and pack callback is used to convert bettween OFPT_PROCESSOR_* buffer and internal structure. This two callback interpret
+ * the data member of ofp_processor_* structures if there is any.
+ * The free callback is used to free memory in a OFPT_PROCESSOR_* message. */
 typedef int (*unpack_callback)(uint8_t *src, uint8_t **msg, enum ofp_type type, char *errbuf);
 typedef int (*pack_callback)(uint8_t *msg, uint8_t *buf, enum ofp_type type);
 typedef int (*free_callback)(uint8_t *msg, enum ofp_type type);
@@ -48,6 +52,7 @@ enum PP_Types {
 };
 #undef ADD_PP
 
+/* Array of packe processor's names. (e.g. PP_types_name[DEFAULT] == "Default") */
 char **PP_types_name;
 
 struct PP_types_list {
@@ -68,8 +73,13 @@ struct PP_types_list {
     struct PP_types_list    *next;
 } *PP_types_list;
 
+/* Initialize packet processor:
+ * i,  Initialize PP_types_name array
+ * ii, Call for every registered pp type the initializer
+ *     (e.g default_packetproc_init) */
 void init_packetprocessors(struct packetproc *packetproc);
 
+/* Return PP_types_list for a specific packet processor type. */
 struct PP_types_list *pp_types_get(uint32_t type);
 
 #endif /* PACKETPROC_TYPES_H */

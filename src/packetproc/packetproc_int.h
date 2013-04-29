@@ -17,7 +17,7 @@
 #define MAX_PP_NUM_GLOBAL 255;
 
 /* Extended pl_pkt structure. Used by pp_send_msg to send a pipeline
- * packet in a specific pp's msg_mbox with the mbox mechanism*/
+ * packet to a specific pp's msg_mbox with the mbox mechanism*/
 struct pp_msg {
     struct list_node list;
 

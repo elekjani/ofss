@@ -19,7 +19,7 @@ enum notifType {
 
 /* The notification messages' header. The notifType member can be
  * any of the value of notifType enum. Every info struct (see below)
- * has this header, so it is safe to cast like the ofp_header type*/
+ * has this header, so it is safe to cast like the ofp_header type */
 struct notifData {
     uint8_t status:4;
     uint8_t notifType:4;

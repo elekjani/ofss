@@ -14,6 +14,7 @@
 #include "packetproc/packetproc_types.h"
 #include "packetproc/packetproc_int.h"
 
+/* Initialization function, called by init_packetprocessors (see in packetproc_type.h) */
 struct PP_types_list* 
 default_packetproc_init(struct packetproc *packetproc);
 

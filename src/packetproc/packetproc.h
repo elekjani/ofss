@@ -71,8 +71,10 @@ packetproc_inst_stats_reply(struct packetproc *packetproc, uint32_t proc_id, uin
 struct packetproc* 
 packetproc_new(struct dp *dp);
 
-/* Forward the packet processor modification or contreller messeage
- * Used by the controller manager to forward OFPT_PROCESSOR_* messages */
+/* Forward the packet processor modification or contreller messeage.
+ * Used by the controller manager to forward OFPT_PROCESSOR_* messages.
+ * The forwarding is done by calling the appropriate packet processor's mod_cb 
+ * or ctrl_cb callback */
 ssize_t
 packetproc_proc_msg(struct packetproc *packetproc, struct ofl_msg_processor *msg);
 

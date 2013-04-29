@@ -35,7 +35,7 @@ struct lldp_main {
     char*                   system_capabilities;
 };
 
-/* The private of object of a specific LLDP packet processor */
+/* The private object of a specific LLDP packet processor */
 struct lldp_pp {
     struct lldp_main  *lldp_main;
     struct pp         *pp;
